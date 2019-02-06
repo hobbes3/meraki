@@ -66,7 +66,7 @@ if __name__ == "__main__":
             servers = [
                 s
                 for s in servers
-                if s["host"]!="54.224.32.118" and s["host"]!=SYSLOG_HOST
+                if s["host"]!=SYSLOG_HOST
             ]
 
         servers.append({
