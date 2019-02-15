@@ -22,11 +22,11 @@ if __name__ == "__main__":
 
     logger = logging.getLogger("logger")
     logger.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(LOG_PATH, maxBytes=LOG_ROTATION_BYTES, backupCount=LOG_ROTATION_LIMIT)
+    handler = logging.handlers.RotatingFileHandler(SET_SYSLOG_SERVERS_LOG_PATH, maxBytes=LOG_ROTATION_BYTES, backupCount=LOG_ROTATION_LIMIT)
     handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-7s] (%(threadName)-10s) %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     logger.addHandler(handler)
 
-    print("Log file at {}.".format(LOG_PATH))
+    print("Log file at {}.".format(SET_SYSLOG_SERVERS_LOG_PATH))
 
     headers = {
         "X-Cisco-Meraki-API-Key": API_KEY,

@@ -2,3 +2,15 @@
 owner = admin
 version = 7.2.1
 modtime = 1549399410.975129000
+
+[indexes/meraki_api]
+owner = admin
+version = 7.2.3
+modtime = 1549502900.735398000
+
+[inputs/http%3A%2F%2Fmeraki_api]
+access = read : [ admin ], write : [ admin ]
+export = none
+owner = admin
+version = 7.2.4
+modtime = 1550146238.632479000
