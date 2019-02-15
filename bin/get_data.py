@@ -9,6 +9,7 @@ import json
 import logging
 import logging.handlers
 from random import uniform
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from tqdm import tqdm
 from multiprocessing.dummy import Pool
 from pathlib import Path
@@ -31,6 +32,8 @@ if __name__ == "__main__":
 
     print("Log file at {}.".format(GET_DATA_LOG_PATH))
 
+    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+
     meraki_headers = {
         "X-Cisco-Meraki-API-Key": API_KEY,
         "Content-Type": "application/json",
@@ -51,6 +54,7 @@ if __name__ == "__main__":
 
     data = ""
     network_list = []
+    device_list = []
 
     logger.debug("Found {} network(s).".format(len(networks)))
     # Sending data to Splunk via HEC in batch mode.
@@ -75,8 +79,6 @@ if __name__ == "__main__":
     r = requests.post(hec_url, headers=hec_headers, data=data, verify=False, timeout=TIMEOUT)
     r.raise_for_status()
 
-    device_list = []
-
     def get_devices(network_id):
         sleep = uniform(1, 5)
         logger.debug("Sleeping for {} seconds.".format(sleep))
@@ -95,6 +97,11 @@ if __name__ == "__main__":
         for device in devices:
             device["tags"] = device["tags"].split() if device.get("tags") else None
 
+            device_list.append({
+                "network_id": network_id,
+                "device_serial": device["serial"]
+            })
+
             event = {
                 "index": "meraki_api",
                 "sourcetype": "meraki_api_device",
@@ -110,12 +117,68 @@ if __name__ == "__main__":
             r = requests.post(hec_url, headers=hec_headers, data=data, verify=False, timeout=TIMEOUT)
             r.raise_for_status()
 
+    def get_clients(device):
+        sleep = uniform(1, 5)
+        logger.debug("Sleeping for {} seconds.".format(sleep))
+        time.sleep(sleep)
+
+        network_id = device["network_id"]
+        device_serial = device["device_serial"]
+
+        meraki_url = "https://api.meraki.com/api/v0/devices/{}/clients".format(device_serial)
+
+        params = {
+            "timespan": 3600
+        }
+
+        logger.info("Getting clients via {}.".format(meraki_url))
+        r = requests.get(meraki_url, headers=meraki_headers, params=params, timeout=TIMEOUT)
+        r.raise_for_status()
+        clients = r.json()
+
+        data = ""
+
+        logger.debug("Found {} client(s) for device {}.".format(len(clients), device_serial))
+        for client in clients:
+            client["networkId"] = network_id
+            client["deviceSerial"] = device_serial
+
+            event = {
+                "index": "meraki_api",
+                "sourcetype": "meraki_api_client",
+                "source": "http:get_data.py",
+                "event": client
+            }
+            logger.debug(event)
+
+            data += json.dumps(event)
+
+        if data:
+            logger.info("Sending client data to Splunk via {} for device {}.".format(hec_url, device_serial))
+            r = requests.post(hec_url, headers=hec_headers, data=data, verify=False, timeout=TIMEOUT)
+            r.raise_for_status()
+
     pool = Pool(THREADS)
 
     # DEBUG
-    network_list = network_list[:20]
+    #network_list = network_list[:100]
+
+    print("Getting and sending devices per network.")
 
     for _ in tqdm(pool.imap_unordered(get_devices, network_list), total=len(network_list)):
+        pass
+
+    pool.close()
+    pool.join()
+
+    pool = Pool(THREADS)
+
+    # DEBUG
+    #device_list = device_list[:100]
+
+    print("Getting and sending clients per device.")
+
+    for _ in tqdm(pool.imap_unordered(get_clients, device_list), total=len(device_list)):
         pass
 
     pool.close()
