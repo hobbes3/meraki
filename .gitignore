@@ -1,3 +1,5 @@
 settings.py
 *.pyo
 __pycache__/
+lookups/meraki_networks.csv
+lookups/meraki_devices.csv

@@ -14,3 +14,39 @@ export = none
 owner = admin
 version = 7.2.4
 modtime = 1550146238.632479000
+
+[savedsearches/lookup_networks]
+export = none
+owner = admin
+version = 7.2.4
+modtime = 1550615482.729467000
+
+[savedsearches/lookup_devices]
+export = none
+owner = admin
+version = 7.2.4
+modtime = 1550615656.967878000
+
+[transforms/meraki_networks]
+export = system
+owner = admin
+version = 7.2.4
+modtime = 1550257321.383047000
+
+[transforms/meraki_devices]
+export = system
+owner = admin
+version = 7.2.4
+modtime = 1550257341.544304000
+
+[props/meraki_syslog/LOOKUP-meraki_syslog]
+export = system
+owner = admin
+version = 7.2.4
+modtime = 1550615533.377216000
+
+[props/meraki_syslog/LOOKUP-1]
+export = system
+owner = admin
+version = 7.2.4
+modtime = 1550616341.037445000
