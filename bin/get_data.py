@@ -217,7 +217,6 @@ if __name__ == "__main__":
             print("Sending network data to Splunk...")
             get_post_data(hec_url, method="POST", headers=hec_headers, data=data, give_up=False)
 
-
         # DEBUG
         #network_list = network_list[:50]
 
