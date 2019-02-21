@@ -36,6 +36,18 @@ def gracefully_exit():
         logger.info("INCOMPLETE. Total elapsed seconds: {}.".format(time.time() - start_time))
         os._exit(1)
 
+def is_good_meraki_response(response):
+    if response and "errors" not in response and isinstance(response, list):
+        return True
+
+    return False
+
+def get_data(url, headers=None, params=None, give_up=None):
+    return get_post_data(url, method="GET", headers=headers, params=params, give_up=give_up)
+
+def post_data(url, headers=None, params=None, data=None, give_up=None):
+    return get_post_data(url, method="POST", headers=headers, params=params, data=data, give_up=give_up)
+
 def get_post_data(url, method="GET", headers=None, params=None, data=None, give_up=True):
     count_try = 0
 
@@ -81,16 +93,48 @@ def get_post_data(url, method="GET", headers=None, params=None, data=None, give_
     if method=="GET":
         return r.json()
 
+def get_and_send_wireless_health(network_id):
+    meraki_url = "https://api.meraki.com/api/v0/networks/{}/connectionStats".format(network_id)
+
+    # Snap time to the current hour.
+    t1 = int(start_time - start_time % 3600)
+    t0 = t1 - 3600
+
+    params = {
+        "t0": t0,
+        "t1": t1
+    }
+
+    logger.info("Getting wireless health via {}.".format(meraki_url))
+    wireless_health = get_data(meraki_url, headers=meraki_headers, params=params, give_up=False)
+
+    if is_good_meraki_response(wireless_health):
+        wireless_health["networkId"] = network_id
+        wireless_health["t0"] = t0
+        wireless_health["t1"] = t1
+
+        data = {
+            "index": "meraki_api",
+            "sourcetype": "meraki_api_wireless_health",
+            "source": "http:get_data.py",
+            "event": wireless_health
+        }
+
+        logger.debug(data)
+
+        logger.info("Sending wireless health data to Splunk for network {}.".format(network_id))
+        post_data(hec_url, headers=hec_headers, data=data, give_up=False)
+
 def get_and_send_devices(network_id):
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices".format(network_id)
 
     logger.info("Getting devices via {}.".format(meraki_url))
-    devices = get_post_data(meraki_url, headers=meraki_headers, give_up=False)
+    devices = get_data(meraki_url, headers=meraki_headers, give_up=False)
     logger.debug("Found {} device(s) for network {}.".format(len(devices), network_id))
 
     data = ""
 
-    if isinstance(devices, list):
+    if is_good_meraki_response(devices):
         for device in devices:
             device["tags"] = device["tags"].split() if device.get("tags") else None
 
@@ -110,8 +154,8 @@ def get_and_send_devices(network_id):
             data += json.dumps(event)
 
     if data:
-        logger.info("Sending device data to Splunk for network {}.".format(hec_url, network_id))
-        get_post_data(hec_url, method="POST", headers=hec_headers, data=data, give_up=False)
+        logger.info("Sending device data to Splunk for network {}.".format(network_id))
+        post_data(hec_url, headers=hec_headers, data=data, give_up=False)
 
 def get_and_send_clients(device):
     network_id = device["network_id"]
@@ -123,12 +167,12 @@ def get_and_send_clients(device):
     }
 
     logger.info("Getting clients via {}.".format(meraki_url))
-    clients = get_post_data(meraki_url, headers=meraki_headers, params=params)
+    clients = get_data(meraki_url, headers=meraki_headers, params=params)
     logger.debug("Found {} client(s) for device {}.".format(len(clients), device_serial))
 
     data = ""
 
-    if isinstance(clients, list):
+    if is_good_meraki_response(clients):
         for client in clients:
             client["networkId"] = network_id
             client["deviceSerial"] = device_serial
@@ -144,8 +188,8 @@ def get_and_send_clients(device):
             data += json.dumps(event)
 
     if data:
-        logger.info("Sending client data to Splunk for device {}.".format(hec_url, device_serial))
-        get_post_data(hec_url, method="POST", headers=hec_headers, data=data, give_up=False)
+        logger.info("Sending client data to Splunk for device {}.".format(device_serial))
+        post_data(hec_url, headers=hec_headers, data=data, give_up=False)
 
 if __name__ == "__main__":
     start_time = time.time()
@@ -162,6 +206,8 @@ if __name__ == "__main__":
     logger.addHandler(handler)
 
     print("Log file at {}.".format(GET_DATA_LOG_PATH))
+
+    logger.info("===START OF SCRIPT===")
 
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
     count_error = Counter(0)
@@ -187,7 +233,7 @@ if __name__ == "__main__":
 
         logger.info("Getting networks via {}.".format(meraki_url))
         print("Getting networks...")
-        networks = get_post_data(meraki_url, headers=meraki_headers, give_up=False)
+        networks = get_data(meraki_url, headers=meraki_headers, give_up=False)
         logger.debug("Found {} network(s).".format(len(networks)))
         print("Found {} network(s)!".format(len(networks)))
 
@@ -213,28 +259,35 @@ if __name__ == "__main__":
                 logger.debug(event)
                 data += json.dumps(event)
 
-            logger.info("Sending network data to Splunk via {}.".format(hec_url))
+            logger.info("Sending network data to Splunk.")
             print("Sending network data to Splunk...")
-            get_post_data(hec_url, method="POST", headers=hec_headers, data=data, give_up=False)
+            post_data(hec_url, headers=hec_headers, data=data, give_up=False)
 
         # DEBUG
         #network_list = network_list[:50]
 
-        print("Getting and sending devices per network...")
+        #print("Getting and sending wireless health data per network...")
+        #for _ in tqdm(pool.imap_unordered(get_and_send_wireless_health, network_list), total=len(network_list)):
+        #    pass
+
+        # DEBUG
+        #network_list = network_list[:50]
+
+        print("Getting and sending device data per network...")
         for _ in tqdm(pool.imap_unordered(get_and_send_devices, network_list), total=len(network_list)):
             pass
 
         # DEBUG
         #device_list = device_list[:5]
 
-        print("Getting and sending clients per device...")
+        print("Getting and sending client data per device...")
         for _ in tqdm(pool.imap_unordered(get_and_send_clients, device_list), total=len(device_list)):
             pass
 
         pool.close()
         pool.join()
     except KeyboardInterrupt:
-        print("\nCaught KeyboardInterrupt! Terminating workers. Please wait...")
+        print("\nCaught KeyboardInterrupt! Cleaning up and terminating workers. Please wait...")
         logger.warning("Caught KeyboardInterrupt!")
         pool.terminate()
         pool.join()
