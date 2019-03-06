@@ -116,6 +116,11 @@ def get_and_send_devices(network_id):
 
             device["tags"] = device["tags"].split() if device.get("tags") else None
 
+            device_status = next((d for d in device_statuses if d["serial"] == device_serial), None)
+
+            if device_status:
+                device["status"] = device_status["status"]
+
             meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/performance".format(network_id, device_serial)
             device_perf = get_data(meraki_url, headers=meraki_headers, give_up=False)
 
@@ -304,15 +309,15 @@ if __name__ == "__main__":
             post_data(hec_url, headers=hec_headers, data=data, give_up=False)
 
         # Currently this is the only way to get uplink ip, which is needed for per-device /lossAndLatencyHistory later.
-        logger.info("Getting network uplinks...")
-        print("Getting network uplinks...")
-        meraki_url = "https://api.meraki.com/api/v0/organizations/{}/uplinksLossAndLatency".format(ORG_ID)
-        org_uplinks = get_data(meraki_url, headers=meraki_headers, give_up=False)
-        logger.debug("Found {} uplink(s).".format(len(org_uplinks)))
-        print("Found {} uplink(s)!".format(len(org_uplinks)))
+        logger.info("Getting device status(es)...")
+        print("Getting device status(es)...")
+        meraki_url = "https://api.meraki.com/api/v0/organizations/{}/deviceStatuses".format(ORG_ID)
+        device_statuses = get_data(meraki_url, headers=meraki_headers, give_up=False)
+        logger.debug("Found {} device status(es).".format(len(device_statuses)))
+        print("Found {} device status(es)!".format(len(device_statuses)))
 
         # DEBUG
-        network_list = network_list[:25]
+        #network_list = network_list[:25]
 
         logger.info("Getting and sending device data per network...")
         print("Getting and sending device data per network...")
@@ -320,16 +325,17 @@ if __name__ == "__main__":
             pass
 
         # DEBUG
-        device_list = device_list[:100]
+        #device_list = device_list[:100]
 
         logger.info("Getting and sending device loss and latency data per device...")
         print("Getting and sending device loss and latency data per device...")
         for _ in tqdm(pool.imap_unordered(get_and_send_device_loss_and_latency, device_list), total=len(device_list)):
             pass
 
-        #print("Getting and sending client data per device...")
-        #for _ in tqdm(pool.imap_unordered(get_and_send_clients, device_list), total=len(device_list)):
-        #    pass
+        logger.info("Getting and sending client data per device...")
+        print("Getting and sending client data per device...")
+        for _ in tqdm(pool.imap_unordered(get_and_send_clients, device_list), total=len(device_list)):
+            pass
 
         pool.close()
         pool.join()
