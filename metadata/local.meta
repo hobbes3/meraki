@@ -19,13 +19,13 @@ modtime = 1550146238.632479000
 export = none
 owner = admin
 version = 7.2.4
-modtime = 1550615482.729467000
+modtime = 1552520048.715596000
 
 [savedsearches/lookup_devices]
 export = none
 owner = admin
 version = 7.2.4
-modtime = 1550699214.086081000
+modtime = 1552520020.603266000
 
 [transforms/meraki_networks]
 export = system
