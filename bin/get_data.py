@@ -108,24 +108,17 @@ def get_and_send_devices(network_id):
     if is_good_meraki_response(devices, list):
         for device in devices:
             device_serial = device["serial"]
+            device_model = device["model"]
 
             device_list.append({
                 "network_id": network_id,
                 "device_serial": device_serial,
+                "model": device_model,
             })
 
             device["tags"] = device["tags"].split() if device.get("tags") else None
 
             device_status = next((d for d in device_statuses if d["serial"] == device_serial), None)
-
-            if device_status:
-                device["status"] = device_status["status"]
-
-            meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/performance".format(network_id, device_serial)
-            device_perf = get_data(meraki_url, headers=meraki_headers, give_up=False)
-
-            if is_good_meraki_response(device_perf, dict):
-                device.update(device_perf)
 
             meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/uplink".format(network_id, device_serial)
             uplinks = get_data(meraki_url, headers=meraki_headers, give_up=False)
@@ -136,6 +129,16 @@ def get_and_send_devices(network_id):
                     uplinks[i]["interface"] = uplink["interface"].lower().replace(" ", "")
 
                 device["uplinks"] = uplinks
+
+            if device_status:
+                device["status"] = device_status["status"]
+
+            if device_model.startswith("MX"):
+                meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/performance".format(network_id, device_serial)
+                device_perf = get_data(meraki_url, headers=meraki_headers, give_up=False)
+
+                if is_good_meraki_response(device_perf, dict):
+                    device.update(device_perf)
 
             event = {
                 "index": "meraki_api",
@@ -153,9 +156,9 @@ def get_and_send_devices(network_id):
     else:
         logger.warning("No device data to send to Splunk for network {}.".format(network_id))
 
-def get_and_send_device_loss_and_latency(device):
-    network_id = device["network_id"]
-    device_serial = device["device_serial"]
+def get_and_send_device_loss_and_latency(mx_device):
+    network_id = mx_device["network_id"]
+    device_serial = mx_device["device_serial"]
 
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/lossAndLatencyHistory".format(network_id, device_serial)
     # Snap time to the current hour.
@@ -324,13 +327,18 @@ if __name__ == "__main__":
         for _ in tqdm(pool.imap_unordered(get_and_send_devices, network_list), total=len(network_list)):
             pass
 
+        mx_device_list = [d for d in device_list if d["model"].startswith("MX")]
+
         # DEBUG
-        #device_list = device_list[:100]
+        #mx_device_list = mx_device_list[:25]
 
         logger.info("Getting and sending device loss and latency data per device...")
         print("Getting and sending device loss and latency data per device...")
-        for _ in tqdm(pool.imap_unordered(get_and_send_device_loss_and_latency, device_list), total=len(device_list)):
+        for _ in tqdm(pool.imap_unordered(get_and_send_device_loss_and_latency, mx_device_list), total=len(mx_device_list)):
             pass
+
+        # DEBUG
+        #device_list = device_list[:50]
 
         logger.info("Getting and sending client data per device...")
         print("Getting and sending client data per device...")
