@@ -353,6 +353,11 @@ if __name__ == "__main__":
         pool.terminate()
         pool.join()
         gracefully_exit()
+    except:
+        logger.fatal("{}. Script exiting!".format(sys.exc_info()[0]))
+        pool.terminate()
+        pool.join()
+        gracefully_exit()
 
     logger.info("DONE. Total elapsed seconds: {}.".format(time.time() - start_time))
     print("Done!")

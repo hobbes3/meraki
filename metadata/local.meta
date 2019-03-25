@@ -50,3 +50,17 @@ export = system
 owner = admin
 version = 7.2.4
 modtime = 1550616341.037445000
+
+[savedsearches/network_stats_dc_mac]
+access = read : [ * ], write : [ admin, power ]
+export = none
+owner = admin
+version = 7.2.4.2
+modtime = 1552671319.440895000
+
+[savedsearches/device_geostats_dc_mac]
+access = read : [ * ], write : [ admin, power ]
+export = none
+owner = admin
+version = 7.2.4.2
+modtime = 1552639069.103282000
