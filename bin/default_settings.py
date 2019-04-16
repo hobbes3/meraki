@@ -8,6 +8,7 @@ LOG_ROTATION_BYTES = 25 * 1024 * 1024
 LOG_ROTATION_LIMIT = 100
 
 TIMEOUT = 5
+TOTAL_ERROR_LIMIT = 100
 
 # set_syslog_servers.py
 SET_SYSLOG_SERVERS_LOG_PATH = "/home/splunk/Splunk_TA_meraki_logs/set_syslog_servers.log"

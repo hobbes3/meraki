@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import json
+import traceback
 import logging
 import logging.handlers
 from random import uniform
@@ -353,8 +354,9 @@ if __name__ == "__main__":
         pool.terminate()
         pool.join()
         gracefully_exit()
-    except:
-        logger.fatal("{}. Script exiting!".format(sys.exc_info()[0]))
+    except Exception:
+        logger.exception("An exepection occured!")
+        traceback.print_exc()
         pool.terminate()
         pool.join()
         gracefully_exit()
