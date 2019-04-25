@@ -153,7 +153,7 @@ def get_and_send_devices(network_id):
 
     if data:
         logger.info("Sending device data to Splunk for network {}.".format(network_id))
-        post_data(hec_url, headers=hec_headers, data=data, give_up=False)
+        post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
     else:
         logger.warning("No device data to send to Splunk for network {}.".format(network_id))
 
@@ -201,7 +201,7 @@ def get_and_send_device_loss_and_latency(mx_device):
 
     if data:
         logger.info("Sending device loss and latency data to Splunk for network {} and device {}.".format(device_serial, network_id))
-        post_data(hec_url, headers=hec_headers, data=data, give_up=False)
+        post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
     else:
         logger.warning("No device loss and latency data to send to Splunk for network {} and device {}.".format(device_serial, network_id))
 
@@ -237,7 +237,7 @@ def get_and_send_clients(device):
 
     if data:
         logger.info("Sending client data to Splunk for device {}.".format(device_serial))
-        post_data(hec_url, headers=hec_headers, data=data, give_up=False)
+        post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
     else:
         logger.warning("No client data to send to Splunk for device {}.".format(device_serial))
 
@@ -268,11 +268,9 @@ if __name__ == "__main__":
         "Content-Type": "application/json",
     }
 
-    hec_headers = {
-        "Authorization": "Splunk " + HEC_TOKEN
+    http_headers = {
+        "Authorization": HTTP_AUTH
     }
-
-    hec_url = HEC_URL + "/services/collector"
 
     pool = Pool(THREADS)
 
@@ -310,7 +308,7 @@ if __name__ == "__main__":
 
             logger.info("Sending network data to Splunk.")
             print("Sending network data to Splunk...")
-            post_data(hec_url, headers=hec_headers, data=data, give_up=False)
+            post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
 
         # Currently this is the only way to get uplink ip, which is needed for per-device /lossAndLatencyHistory later.
         logger.info("Getting device status(es)...")
