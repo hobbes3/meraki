@@ -145,10 +145,11 @@ def get_and_send_devices(network_id):
                 "index": "meraki_api",
                 "sourcetype": "meraki_api_device",
                 "source": "http:get_data.py",
-                "event": device,
+                #"event": device,
+                "event": json.dumps(device),
             }
 
-            logger.debug(event)
+            logger.debug(json.dumps(event))
             data += json.dumps(event)
 
     if data:
@@ -193,10 +194,11 @@ def get_and_send_device_loss_and_latency(mx_device):
                 "index": "meraki_api",
                 "sourcetype": "meraki_api_device_loss_and_latency",
                 "source": "http:get_data.py",
-                "event": device,
+                #"event": device,
+                "event": json.dumps(device),
             }
 
-            logger.debug(event)
+            logger.debug(json.dumps(event))
             data += json.dumps(event)
 
     if data:
@@ -229,10 +231,11 @@ def get_and_send_clients(device):
                 "index": "meraki_api",
                 "sourcetype": "meraki_api_client",
                 "source": "http:get_data.py",
-                "event": client
+                #"event": client,
+                "event": json.dumps(client),
             }
 
-            logger.debug(event)
+            logger.debug(json.dumps(event))
             data += json.dumps(event)
 
     if data:
@@ -300,10 +303,11 @@ if __name__ == "__main__":
                     "index": "meraki_api",
                     "sourcetype": "meraki_api_network",
                     "source": "http:get_data.py",
-                    "event": network
+                    #"event": network,
+                    "event": json.dumps(network),
                 }
 
-                logger.debug(event)
+                logger.debug(json.dumps(event))
                 data += json.dumps(event)
 
             logger.info("Sending network data to Splunk.")

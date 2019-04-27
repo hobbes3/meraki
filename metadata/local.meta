@@ -1,8 +1,3 @@
-[indexes/meraki_api]
-owner = admin
-version = 7.2.3
-modtime = 1549502900.735398000
-
 [inputs/http%3A%2F%2Fmeraki_api]
 access = read : [ admin ], write : [ admin ]
 export = none
@@ -63,4 +58,9 @@ modtime = 1552639069.103282000
 [indexes/meraki_syslog]
 owner = admin
 version = 7.2.5.1
-modtime = 1555669715.319490000
+modtime = 1556225129.660111000
+
+[indexes/meraki_api]
+owner = admin
+version = 7.2.5.1
+modtime = 1556330609.101087000
