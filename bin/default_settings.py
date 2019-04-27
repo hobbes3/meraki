@@ -27,5 +27,5 @@ GET_DATA_LOG_PATH = "/home/splunk/Splunk_TA_meraki_logs/get_data.log"
 THREADS = 4
 SLEEP = 1
 # Splunk or Cribl HEC info
-HTTP_URL = "https://1.2.3.4:8088/services/collector"
+HTTP_URL = "https://1.2.3.4:8088/services/collector/event"
 HTTP_AUTH = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
