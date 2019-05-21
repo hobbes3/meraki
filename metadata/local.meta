@@ -5,18 +5,6 @@ owner = admin
 version = 7.2.4
 modtime = 1550146238.632479000
 
-[savedsearches/lookup_networks]
-export = none
-owner = admin
-version = 7.2.4
-modtime = 1552520048.715596000
-
-[savedsearches/lookup_devices]
-export = none
-owner = admin
-version = 7.2.4
-modtime = 1552520020.603266000
-
 [transforms/meraki_networks]
 export = system
 owner = admin
@@ -45,15 +33,15 @@ modtime = 1550616341.037445000
 access = read : [ * ], write : [ admin, power ]
 export = none
 owner = admin
-version = 7.2.4.2
-modtime = 1552671319.440895000
+version = 7.2.5.1
+modtime = 1558399303.101777000
 
 [savedsearches/device_geostats_dc_mac]
 access = read : [ * ], write : [ admin, power ]
 export = none
 owner = admin
-version = 7.2.4.2
-modtime = 1552639069.103282000
+version = 7.2.5.1
+modtime = 1558399286.921607000
 
 [indexes/meraki_syslog]
 owner = admin
@@ -64,3 +52,17 @@ modtime = 1556225129.660111000
 owner = admin
 version = 7.2.5.1
 modtime = 1556330609.101087000
+
+[savedsearches/lookup_meraki_devices]
+access = read : [ * ], write : [ admin, power ]
+export = none
+owner = admin
+version = 7.2.5.1
+modtime = 1558400089.659630000
+
+[savedsearches/lookup_meraki_networks]
+access = read : [ * ], write : [ admin, power ]
+export = none
+owner = admin
+version = 7.2.5.1
+modtime = 1558400101.900789000
