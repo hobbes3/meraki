@@ -85,8 +85,9 @@ def get_post_data(url, method="GET", headers=None, params=None, data=None, give_
             time.sleep(try_sleep)
             count_try += 1
             pass
-        except:
-            logger.fatal("{}. Script exiting!".format(sys.exc_info()[0]))
+        except Exception:
+            logger.exception("An exception occured!")
+            traceback.print_exc()
             gracefully_exit()
         else:
             logger.info("Try #{}, total error #{}: {} {} - Success.".format(count_try+1, count_error.value, method, r.url))
@@ -253,7 +254,7 @@ if __name__ == "__main__":
         sys.exit("The config file, settings.py, doesn't exist! Please copy, edit, and rename default_settings.py to settings.py.")
 
     logger = logging.getLogger("logger")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.NOTSET)
     handler = logging.handlers.RotatingFileHandler(GET_DATA_LOG_PATH, maxBytes=LOG_ROTATION_BYTES, backupCount=LOG_ROTATION_LIMIT)
     handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-7s] (%(threadName)-10s) %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     logger.addHandler(handler)
@@ -357,7 +358,7 @@ if __name__ == "__main__":
         pool.join()
         gracefully_exit()
     except Exception:
-        logger.exception("An exepection occured!")
+        logger.exception("An exception occured!")
         traceback.print_exc()
         pool.terminate()
         pool.join()
