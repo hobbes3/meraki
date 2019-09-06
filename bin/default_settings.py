@@ -16,11 +16,15 @@ REPEAT = 3600
 TIMEOUT = 5
 # Total number of errors allowed before the script exits.
 TOTAL_ERROR_LIMIT = 100
+# Seconds to wait until retrying.
+TRY_SLEEP = [1, 1, 1, 5, 5, 10]
 
 # set_syslog_servers.py
 SET_SYSLOG_SERVERS_LOG_PATH = "/home/splunk/Splunk_TA_meraki_logs/set_syslog_servers.log"
 SYSLOG_HOST = "1.2.3.4"
 SYSLOG_PORT = 514
+# Removes syslog host if it exists.
+REMOVE_SYSLOG_HOST = "5.6.7.8"
 
 # get_data.py
 GET_DATA_LOG_PATH = "/home/splunk/Splunk_TA_meraki_logs/get_data.log"
@@ -28,4 +32,6 @@ THREADS = 4
 SLEEP = 1
 # Splunk or Cribl HEC info
 HTTP_URL = "https://1.2.3.4:8088/services/collector/event"
-HTTP_AUTH = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+HTTP_HEADERS = {
+    "Authorization": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+}
