@@ -121,7 +121,7 @@ if __name__ == "__main__":
         #networks = networks[:10]
 
         syslog_roles = [
-            "Flows",
+            #"Flows",
             "URLs",
             "Security events",
             "Appliance event log",

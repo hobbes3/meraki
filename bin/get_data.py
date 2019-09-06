@@ -37,6 +37,14 @@ def gracefully_exit():
         logger.info("INCOMPLETE. Total elapsed seconds: {}.".format(time.time() - start_time))
         os._exit(1)
 
+def log_and_print(msg, log_level="info"):
+    if log_level == "debug":
+        logger.debug(msg)
+    else:
+        logger.info(msg)
+
+    print(msg)
+
 def is_good_meraki_response(response, var_type):
     if response and "errors" not in response and isinstance(response, var_type):
         return True
@@ -60,7 +68,7 @@ def get_post_data(url, method="GET", headers=None, params=None, data=None, give_
 
     while True:
         if count_error.value > TOTAL_ERROR_LIMIT:
-            logger.error("Over {} total errors. Script exiting!".format(count_total_errors))
+            logger.error("Over {} total errors. Script exiting!".format(count_error.value))
             gracefully_exit()
 
         try:
@@ -68,13 +76,15 @@ def get_post_data(url, method="GET", headers=None, params=None, data=None, give_
                 r = requests.get(url, headers=headers, params=params, verify=False, timeout=TIMEOUT)
             else:
                 r = requests.post(url, headers=headers, params=params, data=data, verify=False, timeout=TIMEOUT)
+                logger.debug("data = {}".format(data))
 
+            logger.debug("{}: {}".format(method, r.url))
             r.raise_for_status()
-        except (requests.exceptions.HTTPError, requests.exceptions.Timeout, requests.exceptions.TooManyRedirects, requests.exceptions.RequestException) as e:
+        except requests.exceptions.HTTPError as e:
             if str(r.status_code)[:1] == "4":
                 logger.error("Try #{}, total error #{}: {} {} - {}. Skipping!".format(count_try+1, count_error.value, method, url, str(e)))
                 break
-
+        except (requests.exceptions.Timeout, requests.exceptions.TooManyRedirects, requests.exceptions.RequestException) as e:
             if give_up and count_try > len(TRY_SLEEP)-1:
                 logger.error("Try #{}, total error #{}: {} {} - {}. Giving up!".format(count_try+1, count_error.value, method, url, str(e)))
                 break
@@ -84,7 +94,6 @@ def get_post_data(url, method="GET", headers=None, params=None, data=None, give_
             logger.error("Try #{}, total error #{}: {} {} - {}. Sleeping for {} second(s).".format(count_try+1, count_error.value, method, url, str(e), try_sleep))
             time.sleep(try_sleep)
             count_try += 1
-            pass
         except Exception:
             logger.exception("An exception occured!")
             traceback.print_exc()
@@ -99,69 +108,50 @@ def get_post_data(url, method="GET", headers=None, params=None, data=None, give_
         else:
             logger.warning("Empty response!")
 
-def get_and_send_devices(network_id):
-    meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices".format(network_id)
+def update_and_send_devices(device):
+    network_id = device["networkId"]
+    device_serial = device["serial"]
+    device_model = device["model"]
 
-    devices = get_data(meraki_url, headers=meraki_headers, give_up=False)
-    logger.debug("Found {} device(s) for network {}.".format(len(devices), network_id))
+    device["tags"] = device["tags"].split() if device.get("tags") else None
 
-    data = ""
+    device_status = next((d for d in device_statuses if d["serial"] == device_serial), None)
 
-    if is_good_meraki_response(devices, list):
-        for device in devices:
-            device_serial = device["serial"]
-            device_model = device["model"]
+    meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/uplink".format(network_id, device_serial)
+    uplinks = get_data(meraki_url, headers=meraki_headers, give_up=False)
 
-            device_list.append({
-                "network_id": network_id,
-                "device_serial": device_serial,
-                "model": device_model,
-            })
+    if is_good_meraki_response(uplinks, list):
+        for i, uplink in enumerate(uplinks):
+            # Convert values like "Wan 1" to "wan1"
+            uplinks[i]["interface"] = uplink["interface"].lower().replace(" ", "")
 
-            device["tags"] = device["tags"].split() if device.get("tags") else None
+        device["uplinks"] = uplinks
 
-            device_status = next((d for d in device_statuses if d["serial"] == device_serial), None)
+    if device_status:
+        device["status"] = device_status["status"]
 
-            meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/uplink".format(network_id, device_serial)
-            uplinks = get_data(meraki_url, headers=meraki_headers, give_up=False)
+    if device_model.startswith("MX"):
+        meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/performance".format(network_id, device_serial)
+        device_perf = get_data(meraki_url, headers=meraki_headers, give_up=False)
 
-            if is_good_meraki_response(uplinks, list):
-                for i, uplink in enumerate(uplinks):
-                    # Convert values like "Wan 1" to "wan1"
-                    uplinks[i]["interface"] = uplink["interface"].lower().replace(" ", "")
+        if is_good_meraki_response(device_perf, dict):
+            device.update(device_perf)
 
-                device["uplinks"] = uplinks
+    event = {
+        "index": INDEX,
+        "sourcetype": "meraki_api_device",
+        "source": "http:get_data.py",
+        "event": device,
+    }
 
-            if device_status:
-                device["status"] = device_status["status"]
+    data = json.dumps(event)
 
-            if device_model.startswith("MX"):
-                meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/performance".format(network_id, device_serial)
-                device_perf = get_data(meraki_url, headers=meraki_headers, give_up=False)
-
-                if is_good_meraki_response(device_perf, dict):
-                    device.update(device_perf)
-
-            event = {
-                "index": "meraki_api",
-                "sourcetype": "meraki_api_device",
-                "source": "http:get_data.py",
-                #"event": device,
-                "event": json.dumps(device),
-            }
-
-            logger.debug(json.dumps(event))
-            data += json.dumps(event)
-
-    if data:
-        logger.info("Sending device data to Splunk for network {}.".format(network_id))
-        post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
-    else:
-        logger.warning("No device data to send to Splunk for network {}.".format(network_id))
+    logger.info("Sending device {} data to Splunk for network {}.".format(device_serial, network_id))
+    post_data(HTTP_URL, headers=HTTP_HEADERS, data=data, give_up=False)
 
 def get_and_send_device_loss_and_latency(mx_device):
-    network_id = mx_device["network_id"]
-    device_serial = mx_device["device_serial"]
+    network_id = mx_device["networkId"]
+    device_serial = mx_device["serial"]
 
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/lossAndLatencyHistory".format(network_id, device_serial)
     # Snap time to the current hour.
@@ -192,25 +182,23 @@ def get_and_send_device_loss_and_latency(mx_device):
             }
 
             event = {
-                "index": "meraki_api",
+                "index": INDEX,
                 "sourcetype": "meraki_api_device_loss_and_latency",
                 "source": "http:get_data.py",
-                #"event": device,
-                "event": json.dumps(device),
+                "event": device,
             }
 
-            logger.debug(json.dumps(event))
             data += json.dumps(event)
 
     if data:
         logger.info("Sending device loss and latency data to Splunk for network {} and device {}.".format(device_serial, network_id))
-        post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
+        post_data(HTTP_URL, headers=HTTP_HEADERS, data=data, give_up=False)
     else:
         logger.warning("No device loss and latency data to send to Splunk for network {} and device {}.".format(device_serial, network_id))
 
 def get_and_send_clients(device):
-    network_id = device["network_id"]
-    device_serial = device["device_serial"]
+    network_id = device["networkId"]
+    device_serial = device["serial"]
 
     meraki_url = "https://api.meraki.com/api/v0/devices/{}/clients".format(device_serial)
     params = {
@@ -229,19 +217,17 @@ def get_and_send_clients(device):
             client["params"] = params
 
             event = {
-                "index": "meraki_api",
+                "index": INDEX,
                 "sourcetype": "meraki_api_client",
                 "source": "http:get_data.py",
-                #"event": client,
-                "event": json.dumps(client),
+                "event": client,
             }
 
-            logger.debug(json.dumps(event))
             data += json.dumps(event)
 
     if data:
         logger.info("Sending client data to Splunk for device {}.".format(device_serial))
-        post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
+        post_data(HTTP_URL, headers=HTTP_HEADERS, data=data, give_up=False)
     else:
         logger.warning("No client data to send to Splunk for device {}.".format(device_serial))
 
@@ -254,7 +240,7 @@ if __name__ == "__main__":
         sys.exit("The config file, settings.py, doesn't exist! Please copy, edit, and rename default_settings.py to settings.py.")
 
     logger = logging.getLogger("logger")
-    logger.setLevel(logging.NOTSET)
+    logger.setLevel(logging.DEBUG)
     handler = logging.handlers.RotatingFileHandler(GET_DATA_LOG_PATH, maxBytes=LOG_ROTATION_BYTES, backupCount=LOG_ROTATION_LIMIT)
     handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-7s] (%(threadName)-10s) %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     logger.addHandler(handler)
@@ -272,25 +258,17 @@ if __name__ == "__main__":
         "Content-Type": "application/json",
     }
 
-    http_headers = {
-        "Authorization": HTTP_AUTH
-    }
-
     pool = Pool(THREADS)
 
     try:
         print("Press ctrl-c to cancel at any time.")
 
-        logger.info("Getting networks...")
-        print("Getting networks...")
+        log_and_print("Getting networks...")
         meraki_url = "https://api.meraki.com/api/v0/organizations/{}/networks".format(ORG_ID)
         networks = get_data(meraki_url, headers=meraki_headers, give_up=False)
-        logger.debug("Found {} network(s).".format(len(networks)))
-        print("Found {} network(s)!".format(len(networks)))
+        log_and_print("Found {} networks.".format(len(networks)), log_level="debug")
 
         data = ""
-        network_list = []
-        device_list = []
 
         if is_good_meraki_response(networks, list):
             # Sending data to Splunk via HEC in batch mode.
@@ -298,55 +276,50 @@ if __name__ == "__main__":
                 # Improved network tags so they become multivalues in Splunk instead of a space-delimited string
                 network["tags"] = network["tags"].split() if network.get("tags") else None
 
-                network_list.append(network["id"])
-
                 event = {
-                    "index": "meraki_api",
+                    "index": INDEX,
                     "sourcetype": "meraki_api_network",
                     "source": "http:get_data.py",
-                    #"event": network,
-                    "event": json.dumps(network),
+                    "event": network,
                 }
 
-                logger.debug(json.dumps(event))
                 data += json.dumps(event)
 
-            logger.info("Sending network data to Splunk.")
-            print("Sending network data to Splunk...")
-            post_data(HTTP_URL, headers=http_headers, data=data, give_up=False)
+            log_and_print("Sending network data to Splunk...")
+            post_data(HTTP_URL, headers=HTTP_HEADERS, data=data, give_up=False)
 
         # Currently this is the only way to get uplink ip, which is needed for per-device /lossAndLatencyHistory later.
-        logger.info("Getting device status(es)...")
-        print("Getting device status(es)...")
+        log_and_print("Getting device statuses...")
         meraki_url = "https://api.meraki.com/api/v0/organizations/{}/deviceStatuses".format(ORG_ID)
         device_statuses = get_data(meraki_url, headers=meraki_headers, give_up=False)
-        logger.debug("Found {} device status(es).".format(len(device_statuses)))
-        print("Found {} device status(es)!".format(len(device_statuses)))
+        log_and_print("Found {} device statuses.".format(len(device_statuses)), log_level="debug")
 
         # DEBUG
-        #network_list = network_list[:25]
+        networks = networks[:25]
 
-        logger.info("Getting and sending device data per network...")
-        print("Getting and sending device data per network...")
-        for _ in tqdm(pool.imap_unordered(get_and_send_devices, network_list), total=len(network_list)):
+        log_and_print("Getting devices...")
+        meraki_url = "https://api.meraki.com/api/v0/organizations/{}/devices".format(ORG_ID)
+        devices = get_data(meraki_url, headers=meraki_headers, give_up=False)
+        log_and_print("Found {} devices.".format(len(devices)), log_level="debug")
+
+        log_and_print("Updating and sending devices data...")
+        for _ in tqdm(pool.imap_unordered(update_and_send_devices, devices), total=len(devices)):
             pass
 
-        mx_device_list = [d for d in device_list if d["model"].startswith("MX")]
+        mx_devices = [d for d in devices if d["model"].startswith("MX")]
 
         # DEBUG
-        #mx_device_list = mx_device_list[:25]
+        mx_devices = mx_devices[:25]
 
-        logger.info("Getting and sending device loss and latency data per device...")
-        print("Getting and sending device loss and latency data per device...")
-        for _ in tqdm(pool.imap_unordered(get_and_send_device_loss_and_latency, mx_device_list), total=len(mx_device_list)):
+        log_and_print("Getting and sending device loss and latency data per device...")
+        for _ in tqdm(pool.imap_unordered(get_and_send_device_loss_and_latency, mx_devices), total=len(mx_devices)):
             pass
 
         # DEBUG
-        #device_list = device_list[:50]
+        devices = devices[:50]
 
-        logger.info("Getting and sending client data per device...")
-        print("Getting and sending client data per device...")
-        for _ in tqdm(pool.imap_unordered(get_and_send_clients, device_list), total=len(device_list)):
+        log_and_print("Getting and sending client data per device...")
+        for _ in tqdm(pool.imap_unordered(get_and_send_clients, devices), total=len(devices)):
             pass
 
         pool.close()
