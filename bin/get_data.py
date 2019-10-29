@@ -21,13 +21,6 @@ from pathlib import Path
 
 from settings import *
 
-def is_good_meraki_response(r_json, var_type):
-    if "errors" not in r_json and isinstance(r_json, var_type):
-        return True
-
-    logger.warning("Bad response: {}".format(r_json))
-    return False
-
 def get(session, url, params=None, headers=None, auth=None, data=None):
     return get_post("GET", session, url, params=params, headers=headers, auth=auth, data=data)
 
@@ -95,6 +88,13 @@ def gracefully_exit():
     with lock:
         logger.info("INCOMPLETE. Total elapsed seconds: {}.".format(time.time() - start_time))
         os._exit(1)
+
+def is_good_meraki_response(r_json, var_type):
+    if "errors" not in r_json and isinstance(r_json, var_type):
+        return True
+
+    logger.warning("Bad response: {}".format(r_json))
+    return False
 
 def update_and_send_devices(device):
     network_id = device["networkId"]
