@@ -134,7 +134,7 @@ def update_and_send_devices(device):
         event = {
             "index": INDEX,
             "sourcetype": "meraki_api_device",
-            "source": script_path,
+            "source": str(script_file),
             "event": device,
         }
 
@@ -181,7 +181,7 @@ def get_and_send_device_loss_and_latency(mx_device):
                 event = {
                     "index": INDEX,
                     "sourcetype": "meraki_api_device_loss_and_latency",
-                    "source": script_path,
+                    "source": str(script_file),
                     "event": device,
                 }
 
@@ -219,7 +219,7 @@ def get_and_send_clients(device):
                 event = {
                     "index": INDEX,
                     "sourcetype": "meraki_api_client",
-                    "source": script_path,
+                    "source": str(script_file),
                     "event": client,
                 }
 
@@ -234,19 +234,26 @@ def get_and_send_clients(device):
 if __name__ == "__main__":
     start_time = time.time()
 
-    setting_file = Path(os.path.dirname(os.path.realpath(__file__)) + "/settings.py")
-    script_path = os.path.realpath(__file__)
+    script_file = Path(__file__).resolve()
+    script_filename = script_file.stem
+    app_path = script_file.parents[1]
+    bin_path = Path(app_path / "bin")
+    log_path = Path(app_path / "log")
+    log_file = str(log_path) + "/" + script_filename + ".log"
 
-    if not os.path.exists(setting_file):
+    if not Path(bin_path / "settings.py").exists():
         sys.exit("The config file, settings.py, doesn't exist! Please copy, edit, and rename default_settings.py to settings.py.")
 
     logger = logging.getLogger("logger")
     logger.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(GET_DATA_LOG_PATH, maxBytes=LOG_ROTATION_BYTES, backupCount=LOG_ROTATION_LIMIT)
+    handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=LOG_ROTATION_BYTES, backupCount=LOG_ROTATION_LIMIT)
     handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)-7s] (%(threadName)-10s) %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     logger.addHandler(handler)
 
-    print("Log file at {}.".format(GET_DATA_LOG_PATH))
+    if DEBUG_LIMIT:
+        log_and_print("DEBUG_LIMIT={}!".format(DEBUG_LIMIT), level="warning")
+
+    print("Log file at {}.".format(log_file))
 
     logger.info("===START OF SCRIPT===")
 
@@ -277,7 +284,7 @@ if __name__ == "__main__":
 
         if r.text:
             networks = r.json()
-            log_and_print("Found {} networks.".format(len(networks)), level="debug")
+            log_and_print("Found {} networks.".format(len(networks)))
 
             data = ""
 
@@ -290,7 +297,7 @@ if __name__ == "__main__":
                     event = {
                         "index": INDEX,
                         "sourcetype": "meraki_api_network",
-                        "source": script_path,
+                        "source": str(script_file),
                         "event": network,
                     }
 
@@ -306,10 +313,11 @@ if __name__ == "__main__":
         r = get(s, meraki_url, headers=meraki_headers)
         if r.text:
             device_statuses = r.json()
-            log_and_print("Found {} device statuses.".format(len(device_statuses)), level="debug")
+            log_and_print("Found {} device statuses.".format(len(device_statuses)))
 
-        # DEBUG
-        #networks = networks[:20]
+        if DEBUG_LIMIT:
+            log_and_print("Limiting up to {} networks.".format(DEBUG_LIMIT), level="debug")
+            networks = networks[:DEBUG_LIMIT]
 
         log_and_print("Getting devices...")
         devices = []
@@ -317,23 +325,26 @@ if __name__ == "__main__":
         r = get(s, meraki_url, headers=meraki_headers)
         if r.text:
             devices = r.json()
-            log_and_print("Found {} devices.".format(len(devices)), level="debug")
+            log_and_print("Found {} devices.".format(len(devices)))
+
+        if DEBUG_LIMIT:
+            log_and_print("Limiting up to {} devices.".format(DEBUG_LIMIT), level="debug")
+            devices = devices[:DEBUG_LIMIT]
 
         log_and_print("Updating and sending devices data...")
         for _ in tqdm(pool.imap_unordered(update_and_send_devices, devices), total=len(devices)):
             pass
 
         mx_devices = [d for d in devices if d["model"].startswith("MX")]
+        log_and_print("Found {} MX devices.".format(len(mx_devices)))
 
-        # DEBUG
-        #mx_devices = mx_devices[:20]
+        if DEBUG_LIMIT:
+            log_and_print("Limiting up to {} MX devices.".format(DEBUG_LIMIT), level="debug")
+            mx_devices = mx_devices[:DEBUG_LIMIT]
 
         log_and_print("Getting and sending device loss and latency data per device...")
         for _ in tqdm(pool.imap_unordered(get_and_send_device_loss_and_latency, mx_devices), total=len(mx_devices)):
             pass
-
-        # DEBUG
-        #devices = devices[:20]
 
         log_and_print("Getting and sending client data per device...")
         for _ in tqdm(pool.imap_unordered(get_and_send_clients, devices), total=len(devices)):
