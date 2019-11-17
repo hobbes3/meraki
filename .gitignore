@@ -1,5 +1,6 @@
-settings.py
-*.pyo
 __pycache__/
+*.pyc
+*.pyo
+bin/config.toml
 lookups/meraki_networks.csv
 lookups/meraki_devices.csv

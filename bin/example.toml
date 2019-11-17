@@ -1,0 +1,6 @@
+[meraki_api]
+index = "meraki_api"
+org_id = 11111
+repeat = 3600
+  [meraki_api.headers]
+  X-Cisco-Meraki-API-Key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

@@ -1,0 +1,3 @@
+[submodule "bin/splunk_rest"]
+	path = bin/splunk_rest
+	url = https://github.com/hobbes3/splunk_rest.git

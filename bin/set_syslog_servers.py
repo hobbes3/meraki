@@ -78,6 +78,9 @@ def set_syslog_server(network):
             logger.error("Status code {}: Not added {}:{} syslog with {}.".format(status_code, SYSLOG_HOST, SYSLOG_PORT, syslog_roles))
 
 if __name__ == "__main__":
+    print("This is currently an unsupported script! It will be re-developed in the future.")
+    os._exit(1)
+
     start_time = time.time()
 
     setting_file = Path(os.path.dirname(os.path.realpath(__file__)) + "/settings.py")
