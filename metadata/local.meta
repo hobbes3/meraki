@@ -66,3 +66,7 @@ export = none
 owner = admin
 version = 7.2.5.1
 modtime = 1558400101.900789000
+
+[inputs/script%3A%2F%2F.%2Fbin%2Fmeraki_get_data.sh]
+version = 8.0.0
+modtime = 1574116320.658662000

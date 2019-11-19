@@ -50,7 +50,9 @@ def meraki_api():
                     if is_good_meraki_response(device_perf, dict):
                         device.update(device_perf)
 
-            device["__session_id"] = sr.session_id
+            device["splunk_rest"] = {
+                "session_id": sr.session_id
+            }
 
             event = {
                 "index": index,
@@ -93,8 +95,10 @@ def meraki_api():
 
                 if is_good_meraki_response(stats, list):
                     device = {
-                        "__session_id": sr.session_id,
-                        "__params": params,
+                        "splunk_rest": {
+                            "session_id": sr.session_id,
+                            "params": params,
+                        },
                         "networkId": network_id,
                         "deviceSerial": device_serial,
                         "stats": stats,
@@ -134,8 +138,10 @@ def meraki_api():
 
             if is_good_meraki_response(clients, list):
                 for client in clients:
-                    client["__session_id"] = sr.session_id
-                    client["__params"] = params
+                    client["splunk_rest"] = {
+                        "session_id": sr.session_id,
+                        "params": params,
+                    }
                     client["networkId"] = network_id
                     client["deviceSerial"] = device_serial
 
@@ -170,7 +176,9 @@ def meraki_api():
             for network in networks:
                 # Improved network tags so they become multivalues in Splunk instead of a space-delimited string
                 network["tags"] = network["tags"].split() if network.get("tags") else None
-                network["__session_id"] = sr.session_id
+                network["splunk_rest"] = {
+                    "session_id": sr.session_id
+                }
 
                 event = {
                     "index": index,
