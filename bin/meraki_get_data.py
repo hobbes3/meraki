@@ -135,9 +135,14 @@ def meraki_api():
     logger.info("Getting networks...")
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/networks".format(org_id)
     r = s.get(meraki_url, headers=meraki_headers)
+    meta = {
+        "request_id": r.request_id,
+    }
     try:
         networks = parse_meraki_response(r, list)
-        logger.debug("Found networks.", extra={"network_count": len(networks)})
+        m = meta.copy()
+        m["network_count"] = len(networks)
+        logger.debug("Found networks.", extra=m)
 
         data = ""
 
@@ -159,10 +164,10 @@ def meraki_api():
 
             data += json.dumps(event)
 
-        logger.info("Sending network data to Splunk...")
+        logger.info("Sending network data to Splunk...", extra=meta)
         s.post(hec_url, headers=hec_headers, data=data)
     except:
-        logger.warning("", exc_info=True, extra={"request_id": r.request_id})
+        logger.warning("", exc_info=True, extra=meta)
 
     if script_args.sample:
         networks = networks[:20]
@@ -214,8 +219,8 @@ def meraki_loss_latency_history():
     logger.info("Getting and sending MX device loss and latency...")
 
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/uplinksLossAndLatency".format(org_id)
-    # Going back 5 minutes in the past since the docs require at least 2 minutes.
-    t1 = int(sr.start_time - sr.start_time % 60) - 5 * 60
+    # Going back at least 2 minutes in the past as required by the API doc.
+    t1 = int(sr.start_time) - 2 * 60
     # Maximum span is 5 minutes.
     t0 = t1 - 5 * 60
     params = {
@@ -264,12 +269,12 @@ def meraki_loss_latency_history():
         else:
             logger.debug("No device loss and latency data to send to Splunk.", extra=meta)
     except:
-        logger.exception("", extra=meta)
+        logger.warning("", exc_info=True, extra=meta)
 
 
 if __name__ == "__main__":
-    sr.arg_parser.add_argument("-l", "--loss", help="only get the loss and latency history stats", action="store_true")
-    script_args = sr.arg_parser.parse_args()
+    sr.arg_parser.add_argument("--loss", action="store_true", help="only get the loss and latency history stats")
+    script_args = sr.get_script_args()
 
     logger = logging.getLogger("splunk_rest.splunk_rest")
     s = sr.retry_session()
