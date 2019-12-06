@@ -1,3 +1,5 @@
+# Create config.toml and use the stanza below as an example.
+
 [meraki_api]
 index = "meraki_api"
 org_id = 11111

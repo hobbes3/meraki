@@ -3,6 +3,7 @@
 
 import logging
 import json
+import re
 import splunk_rest.splunk_rest as sr
 from splunk_rest.splunk_rest import rest_wrapped
 from datetime import datetime
@@ -89,46 +90,63 @@ def get_and_send_clients(network):
     network_id = network["id"]
 
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/clients".format(network_id)
-    params = {
-        "timespan": sr.config["meraki_api"]["repeat"]
-    }
-    r = s.get(meraki_url, headers=meraki_headers, params=params)
-    meta = {
-        "request_id": r.request_id,
-        "network_id": network_id,
-    }
+    startingAfter = "a000000"
 
-    try:
-        clients = parse_meraki_response(r, list)
-        m = meta.copy()
-        m["client_count"] = len(clients)
-        logger.debug("Found clients.", extra=m)
+    data = ""
 
-        data = ""
+    while startingAfter:
+        params = {
+            "perPage": 1000,
+            "timespan": sr.config["meraki_api"]["repeat"],
+        }
+        r = s.get(meraki_url, headers=meraki_headers, params=params)
+        meta = {
+            "request_id": r.request_id,
+            "network_id": network_id,
+        }
 
-        for client in clients:
-            client["splunk_rest"] = {
-                "session_id": sr.session_id,
-                "request_id": r.request_id,
-            }
-            client["networkId"] = network_id
+        link_header = r.headers["Link"]
 
-            event = {
-                "index": index,
-                "sourcetype": "meraki_api_client",
-                "source": __file__,
-                "event": client,
-            }
-
-            data += json.dumps(event)
-
-        if data:
-            logger.debug("Sending client data to Splunk...", extra=meta)
-            s.post(hec_url, headers=hec_headers, data=data)
+        if match := re.search("startingAfter=(\w+)>; rel=next$", link_header):
+            startingAfter = match.group(1)
+            m = meta.copy()
+            m["startingAfter"] = startingAfter
+            logger.debug("Found next startingAfter param.", extra=m)
         else:
-            logger.debug("No client data to send to Splunk.", extra=meta)
-    except:
-        logger.warning("", exc_info=True, extra=meta)
+            startingAfter = False
+            logger.debug("Didn't find next startingAfter param. Finishing.", extra=meta)
+
+        try:
+            clients = parse_meraki_response(r, list)
+            m = meta.copy()
+            m["client_count"] = len(clients)
+            logger.debug("Found clients.", extra=m)
+
+            data = ""
+
+            for client in clients:
+                client["splunk_rest"] = {
+                    "session_id": sr.session_id,
+                    "request_id": r.request_id,
+                }
+                client["networkId"] = network_id
+
+                event = {
+                    "index": index,
+                    "sourcetype": "meraki_api_client",
+                    "source": __file__,
+                    "event": client,
+                }
+
+                data += json.dumps(event)
+        except:
+            logger.warning("", exc_info=True, extra=meta)
+
+    if data:
+        logger.debug("Sending client data to Splunk...", extra={"network_id": network_id})
+        s.post(hec_url, headers=hec_headers, data=data)
+    else:
+        logger.debug("No client data to send to Splunk.", extra={"network_id": network_id})
 
 @rest_wrapped
 def meraki_api():
