@@ -5,7 +5,7 @@ import logging
 import json
 import re
 import splunk_rest.splunk_rest as sr
-from splunk_rest.splunk_rest import rest_wrapped
+from splunk_rest.splunk_rest import splunk_rest, try_response
 from datetime import datetime
 
 def parse_meraki_response(r, var_type):
@@ -31,7 +31,7 @@ def parse_meraki_response(r, var_type):
     except:
         raise
 
-def update_and_send_devices(device):
+def update_devices(device):
     network_id = device["networkId"]
     device_serial = device["serial"]
     device_model = device["model"]
@@ -40,12 +40,14 @@ def update_and_send_devices(device):
 
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/uplink".format(network_id, device_serial)
     r = s.get(meraki_url, headers=meraki_headers)
-    meta = {
-        "request_id": r.request_id,
-        "network_id": network_id,
-        "device_serial": device_serial,
-    }
-    try:
+
+    @try_response
+    def send_devices(r, *args, **kwargs):
+        meta = {
+            "request_id": r.request_id,
+            "network_id": network_id,
+            "device_serial": device_serial,
+        }
         uplinks = parse_meraki_response(r, list)
 
         for i, uplink in enumerate(uplinks):
@@ -53,24 +55,22 @@ def update_and_send_devices(device):
             uplinks[i]["interface"] = uplink["interface"].lower().replace(" ", "")
 
         device["uplinks"] = uplinks
+        device["splunk_rest"] = {
+            "session_id": sr.session_id,
+            "request_id": r.request_id,
+        }
+
+        @try_response
+        def append_device_perf(rr, *args, **kwargs):
+            device_perf = parse_meraki_response(rr, dict)
+            device.update(device_perf)
+            device["splunk_rest"]["request_id_2"] = rr.request_id
 
         if device_model.startswith("MX"):
             meraki_url = "https://api.meraki.com/api/v0/networks/{}/devices/{}/performance".format(network_id, device_serial)
             logger.debug("Getting device performance per MX device...", extra=meta)
             rr = s.get(meraki_url, headers=meraki_headers)
-
-            try:
-                device_perf = parse_meraki_response(rr, dict)
-                device.update(device_perf)
-            except:
-                m = meta.copy()
-                m["request_id_2"] = rr.request_id
-                logger.warning("", exc_info=True, extra=m)
-
-        device["splunk_rest"] = {
-            "session_id": sr.session_id,
-            "request_id": r.request_id,
-        }
+            append_device_perf(rr, extra={"request_id": r.request_id, "request_id_2": rr.request_id})
 
         event = {
             "index": index,
@@ -83,10 +83,10 @@ def update_and_send_devices(device):
 
         logger.debug("Sending device data to Splunk...", extra=meta)
         s.post(hec_url, headers=hec_headers, data=data)
-    except:
-        logger.warning("", exc_info=True, extra=meta)
 
-def get_and_send_clients(network):
+    send_devices(r)
+
+def get_clients(network):
     network_id = network["id"]
 
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/clients".format(network_id)
@@ -94,10 +94,37 @@ def get_and_send_clients(network):
 
     data = ""
 
+    @try_response
+    def get_client_data(r, *args, **kwargs):
+        clients = parse_meraki_response(r, list)
+        m = meta.copy()
+        m["client_count"] = len(clients)
+        logger.debug("Found clients.", extra=m)
+
+        client_data = ""
+
+        for client in clients:
+            client["splunk_rest"] = {
+                "session_id": sr.session_id,
+                "request_id": r.request_id,
+            }
+            client["networkId"] = network_id
+
+            event = {
+                "index": index,
+                "sourcetype": "meraki_api_client",
+                "source": __file__,
+                "event": client,
+            }
+
+            client_data += json.dumps(event)
+
+        return client_data
+
     while startingAfter:
         params = {
             "perPage": 1000,
-            "timespan": sr.config["meraki_api"]["repeat"],
+            "timespan": repeat,
         }
         r = s.get(meraki_url, headers=meraki_headers, params=params)
         meta = {
@@ -116,31 +143,7 @@ def get_and_send_clients(network):
             startingAfter = False
             logger.debug("Didn't find next startingAfter param. Finishing.", extra=meta)
 
-        try:
-            clients = parse_meraki_response(r, list)
-            m = meta.copy()
-            m["client_count"] = len(clients)
-            logger.debug("Found clients.", extra=m)
-
-            data = ""
-
-            for client in clients:
-                client["splunk_rest"] = {
-                    "session_id": sr.session_id,
-                    "request_id": r.request_id,
-                }
-                client["networkId"] = network_id
-
-                event = {
-                    "index": index,
-                    "sourcetype": "meraki_api_client",
-                    "source": __file__,
-                    "event": client,
-                }
-
-                data += json.dumps(event)
-        except:
-            logger.warning("", exc_info=True, extra=meta)
+        data += get_client_data(r)
 
     if data:
         logger.debug("Sending client data to Splunk...", extra={"network_id": network_id})
@@ -148,15 +151,18 @@ def get_and_send_clients(network):
     else:
         logger.debug("No client data to send to Splunk.", extra={"network_id": network_id})
 
-@rest_wrapped
+@splunk_rest
 def meraki_api():
     logger.info("Getting networks...")
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/networks".format(org_id)
     r = s.get(meraki_url, headers=meraki_headers)
-    meta = {
-        "request_id": r.request_id,
-    }
-    try:
+
+    @try_response
+    def get_and_send_networks(r, *args, **kwargs):
+        meta = {
+            "request_id": r.request_id,
+        }
+
         networks = parse_meraki_response(r, list)
         m = meta.copy()
         m["network_count"] = len(networks)
@@ -184,34 +190,47 @@ def meraki_api():
 
         logger.info("Sending network data to Splunk...", extra=meta)
         s.post(hec_url, headers=hec_headers, data=data)
-    except:
-        logger.warning("", exc_info=True, extra=meta)
+
+        return networks
+
+    networks = get_and_send_networks(r)
 
     if script_args.sample:
         networks = networks[:20]
 
     logger.info("Getting and sending client data per network...")
-    sr.multiprocess(get_and_send_clients, networks)
+    sr.multiprocess(get_clients, networks)
 
     # Currently this is the only way to get uplink ip, which is needed for per-device /lossAndLatencyHistory later.
     logger.info("Getting device statuses...")
-    device_statuses = []
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/deviceStatuses".format(org_id)
     r = s.get(meraki_url, headers=meraki_headers)
-    try:
+
+    @try_response
+    def get_device_statuses(r, *args, **kwargs):
         device_statuses = parse_meraki_response(r, list)
-        logger.info("Found device statuses.", extra={"device_status_count": len(device_statuses)})
-    except:
-        logger.warning("", exc_info=True, extra={"request_id": r.request_id})
+        meta = {
+            "request_id": r.request_id,
+            "device_status_count": len(device_statuses),
+        }
+        logger.info("Found device statuses.", extra=meta)
+
+        return device_statuses
+
+    device_statuses = get_device_statuses(r)
 
     logger.info("Getting devices...")
-    devices = []
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/devices".format(org_id)
     r = s.get(meraki_url, headers=meraki_headers)
 
-    try:
+    @try_response
+    def get_devices(r, *args, **kwargs):
         devices = parse_meraki_response(r, list)
-        logger.info("Found devices.", extra={"device_count": len(devices)})
+        meta = {
+            "request_id": r.request_id,
+            "device_count": len(devices),
+        }
+        logger.info("Found devices.", extra=meta)
 
         def add_device_status(device):
             device_serial = device["serial"]
@@ -222,20 +241,21 @@ def meraki_api():
 
             return device
 
-        devices = [add_device_status(d) for d in devices]
-    except:
-        logger.warning("", exc_info=True, extra={"request_id": r.request_id})
+        devices_with_status = [add_device_status(d) for d in devices]
+
+        return devices_with_status
+
+    devices = get_devices(r)
 
     if script_args.sample:
         devices = devices[:40]
 
     logger.info("Updating and sending devices data...")
-    sr.multiprocess(update_and_send_devices, devices)
+    sr.multiprocess(update_devices, devices)
 
-@rest_wrapped
+@splunk_rest
 def meraki_loss_latency_history():
     logger.info("Getting and sending MX device loss and latency...")
-
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/uplinksLossAndLatency".format(org_id)
     # Going back at least 2 minutes in the past as required by the API doc.
     t1 = int(sr.start_time) - 2 * 60
@@ -246,11 +266,12 @@ def meraki_loss_latency_history():
         "t1": t1,
     }
     r = s.get(meraki_url, headers=meraki_headers, params=params)
-    meta = {
-        "request_id": r.request_id,
-    }
 
-    try:
+    @try_response
+    def send_loss_latency_history(r, *args, **kwargs):
+        meta = {
+            "request_id": r.request_id,
+        }
         device_stats = parse_meraki_response(r, list)
         m = meta.copy()
         m["device_stats_count"] = len(device_stats)
@@ -286,9 +307,8 @@ def meraki_loss_latency_history():
             s.post(hec_url, headers=hec_headers, data=data)
         else:
             logger.debug("No device loss and latency data to send to Splunk.", extra=meta)
-    except:
-        logger.warning("", exc_info=True, extra=meta)
 
+    send_loss_latency_history(r)
 
 if __name__ == "__main__":
     sr.arg_parser.add_argument("--loss", action="store_true", help="only get the loss and latency history stats")
