@@ -42,7 +42,7 @@ def update_devices(device):
     r = s.get(meraki_url, headers=meraki_headers)
 
     @try_response
-    def send_devices(r, *args, **kwargs):
+    def send_devices(r):
         meta = {
             "request_id": r.request_id,
             "network_id": network_id,
@@ -61,7 +61,7 @@ def update_devices(device):
         }
 
         @try_response
-        def append_device_perf(rr, *args, **kwargs):
+        def append_device_perf(rr):
             device_perf = parse_meraki_response(rr, dict)
             device.update(device_perf)
             device["splunk_rest"]["request_id_2"] = rr.request_id
@@ -95,11 +95,11 @@ def get_clients(network):
     data = ""
 
     @try_response
-    def get_client_data(r, *args, **kwargs):
+    def get_client_data(r):
         clients = parse_meraki_response(r, list)
         m = meta.copy()
         m["client_count"] = len(clients)
-        logger.debug("Found clients.", extra=m)
+        logger.debug("Got clients.", extra=m)
 
         client_data = ""
 
@@ -158,7 +158,7 @@ def meraki_api():
     r = s.get(meraki_url, headers=meraki_headers)
 
     @try_response
-    def get_and_send_networks(r, *args, **kwargs):
+    def get_and_send_networks(r):
         meta = {
             "request_id": r.request_id,
         }
@@ -166,7 +166,7 @@ def meraki_api():
         networks = parse_meraki_response(r, list)
         m = meta.copy()
         m["network_count"] = len(networks)
-        logger.debug("Found networks.", extra=m)
+        logger.debug("Got networks.", extra=m)
 
         data = ""
 
@@ -207,13 +207,13 @@ def meraki_api():
     r = s.get(meraki_url, headers=meraki_headers)
 
     @try_response
-    def get_device_statuses(r, *args, **kwargs):
+    def get_device_statuses(r):
         device_statuses = parse_meraki_response(r, list)
         meta = {
             "request_id": r.request_id,
             "device_status_count": len(device_statuses),
         }
-        logger.info("Found device statuses.", extra=meta)
+        logger.info("Got device statuses.", extra=meta)
 
         return device_statuses
 
@@ -224,13 +224,13 @@ def meraki_api():
     r = s.get(meraki_url, headers=meraki_headers)
 
     @try_response
-    def get_devices(r, *args, **kwargs):
+    def get_devices(r):
         devices = parse_meraki_response(r, list)
         meta = {
             "request_id": r.request_id,
             "device_count": len(devices),
         }
-        logger.info("Found devices.", extra=meta)
+        logger.info("Got devices.", extra=meta)
 
         def add_device_status(device):
             device_serial = device["serial"]
@@ -268,14 +268,14 @@ def meraki_loss_latency_history():
     r = s.get(meraki_url, headers=meraki_headers, params=params)
 
     @try_response
-    def send_loss_latency_history(r, *args, **kwargs):
+    def send_loss_latency_history(r):
         meta = {
             "request_id": r.request_id,
         }
         device_stats = parse_meraki_response(r, list)
         m = meta.copy()
         m["device_stats_count"] = len(device_stats)
-        logger.info("Found device stats.", extra=m)
+        logger.info("Got device stats.", extra=m)
 
         data = ""
 
