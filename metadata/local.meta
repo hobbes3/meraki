@@ -57,15 +57,15 @@ modtime = 1556330609.101087000
 access = read : [ * ], write : [ admin, power ]
 export = none
 owner = admin
-version = 7.2.5.1
-modtime = 1558400089.659630000
+version = 8.0.0
+modtime = 1578658652.443598000
 
 [savedsearches/lookup_meraki_networks]
 access = read : [ * ], write : [ admin, power ]
 export = none
 owner = admin
-version = 7.2.5.1
-modtime = 1558400101.900789000
+version = 8.0.0
+modtime = 1578652892.200645000
 
 [inputs/script%3A%2F%2F.%2Fbin%2Fmeraki_get_data.sh]
 version = 8.0.0
