@@ -10,8 +10,20 @@ from splunk_rest.splunk_rest import splunk_rest, try_response
 from datetime import datetime
 
 @splunk_rest
+def meraki_org():
+    logger.info("Getting organizations...")
+    meraki_url = "https://api.meraki.com/api/v0/organizations"
+    r = s.get(meraki_url, headers=meraki_headers)
+
+    @try_response
+    def print_orgs(r):
+        pp = pprint.PrettyPrinter()
+        pp.pprint(r.json())
+
+    orgs = print_orgs(r)
+
+@splunk_rest
 def meraki_api(org_id):
-    print("Working on org_id={}.".format(org_id))
     logger.info("Getting networks...", extra={"org_id": org_id})
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/networks".format(org_id)
     r = s.get(meraki_url, headers=meraki_headers)
@@ -267,7 +279,7 @@ def get_client_data(r, meta, network_id):
     return client_data
 
 @splunk_rest
-def meraki_loss_latency_history():
+def meraki_loss_latency_history(org_id):
     logger.info("Getting and sending MX device loss and latency...")
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/uplinksLossAndLatency".format(org_id)
     # Going back at least 2 minutes in the past as required by the API doc.
@@ -324,19 +336,6 @@ def send_loss_latency_history(r):
     else:
         logger.debug("No device loss and latency data to send to Splunk.", extra=meta)
 
-@splunk_rest
-def meraki_org():
-    logger.info("Getting organizations...")
-    meraki_url = "https://api.meraki.com/api/v0/organizations"
-    r = s.get(meraki_url, headers=meraki_headers)
-
-    orgs = list_orgs(r)
-
-@try_response
-def list_orgs(r):
-    pp = pprint.PrettyPrinter()
-    pp.pprint(r.json())
-
 if __name__ == "__main__":
     sr.arg_parser.add_argument("--loss", action="store_true", help="only get the loss and latency history stats")
     sr.arg_parser.add_argument("--org", action="store_true", help="only list the organizations (needed for getting the all other data)")
@@ -353,10 +352,12 @@ if __name__ == "__main__":
     hec_url = sr.config["hec"]["url"]
     hec_headers = sr.config["hec"]["headers"]
 
-    if script_args.loss:
-        meraki_loss_latency_history()
-    elif script_args.org:
+    if script_args.org:
         meraki_org()
     else:
         for org_id in orgs:
-            meraki_api(org_id)
+            print("Working on org_id={}.".format(org_id))
+            if script_args.loss:
+                meraki_loss_latency_history(org_id)
+            else:
+                meraki_api(org_id)
