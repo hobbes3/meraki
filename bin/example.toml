@@ -1,6 +1,6 @@
 # Create config.toml and use the stanza below as an example.
 
-# Recommended to keep these setting as setting values too "fast" will exceed the Meraki API rate limits.
+# Recommended to keep these values since calling the APIs too fast will exceed the Meraki API rate limits.
 [general]
 thread = 4
 
@@ -8,15 +8,24 @@ thread = 4
 sleep_min = 1.0
 sleep_max = 1.5
 
+# Due to security reasons, this app does NOT create an HEC input.
+# Create the input manually and make sure both index=meraki and index=main are allowed.
+# Change the HEC settings below for your input.
 [hec]
 url = "https://localhost:8088/services/collector/event"
   [hec.headers]
   Authorization = "Splunk xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 [meraki_api]
+# This app already creates an index called meraki_api.
 index = "meraki_api"
-# Get the right org_id by running "./meraki_get_data.py --org"
-org_id = 11111
+# List all orgs by running "./meraki_get_data.py --org" after setting the Meraki API key below.
+# Enter only the orgs you want data from.
+orgs = [
+    11111,
+    22222,
+]
+# This value correspond to the interval of inputs.conf for [script://./bin/meraki_get_data.sh], ie every hour is repeat=3600.
 repeat = 3600
   [meraki_api.headers]
   X-Cisco-Meraki-API-Key = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

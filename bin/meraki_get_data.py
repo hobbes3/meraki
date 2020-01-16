@@ -10,8 +10,9 @@ from splunk_rest.splunk_rest import splunk_rest, try_response
 from datetime import datetime
 
 @splunk_rest
-def meraki_api():
-    logger.info("Getting networks...")
+def meraki_api(org_id):
+    print("Working on org_id={}.".format(org_id))
+    logger.info("Getting networks...", extra={"org_id": org_id})
     meraki_url = "https://api.meraki.com/api/v0/organizations/{}/networks".format(org_id)
     r = s.get(meraki_url, headers=meraki_headers)
 
@@ -66,6 +67,7 @@ def get_and_send_networks(r):
         for network in networks:
             # Improved network tags so they become multivalues in Splunk instead of a space-delimited string
             network["tags"] = network["tags"].split() if network.get("tags") else None
+            network["orgId"] = org_id
             network["splunk_rest"] = {
                 "session_id": sr.session_id,
                 "request_id": r.request_id,
@@ -133,6 +135,7 @@ def send_devices(r, device, network_id, device_serial, device_model):
         # Convert values like "Wan 1" to "wan1"
         uplinks[i]["interface"] = uplink["interface"].lower().replace(" ", "")
 
+    device["orgId"] = org_id
     device["uplinks"] = uplinks
     device["splunk_rest"] = {
         "session_id": sr.session_id,
@@ -250,6 +253,7 @@ def get_client_data(r, meta, network_id):
             "request_id": r.request_id,
         }
         client["networkId"] = network_id
+        client["orgId"] = org_id
 
         event = {
             "index": index,
@@ -297,6 +301,7 @@ def send_loss_latency_history(r):
             d = device_stat.copy()
             del d["timeSeries"]
             stat.update(d)
+            stat["orgId"] = org_id
             stat["splunk_rest"] = {
                 "session_id": sr.session_id,
                 "request_id": r.request_id,
@@ -334,14 +339,14 @@ def list_orgs(r):
 
 if __name__ == "__main__":
     sr.arg_parser.add_argument("--loss", action="store_true", help="only get the loss and latency history stats")
-    sr.arg_parser.add_argument("--org", action="store_true", help="only get the org list (needed for getting the all other data)")
+    sr.arg_parser.add_argument("--org", action="store_true", help="only list the organizations (needed for getting the all other data)")
     script_args = sr.get_script_args()
 
     logger = logging.getLogger("splunk_rest.splunk_rest")
     s = sr.retry_session()
 
     meraki_headers = sr.config["meraki_api"]["headers"]
-    org_id = sr.config["meraki_api"]["org_id"]
+    orgs = sr.config["meraki_api"]["orgs"]
     repeat = sr.config["meraki_api"]["repeat"]
     index = "main" if script_args.test else sr.config["meraki_api"]["index"]
 
@@ -353,4 +358,5 @@ if __name__ == "__main__":
     elif script_args.org:
         meraki_org()
     else:
-        meraki_api()
+        for org_id in orgs:
+            meraki_api(org_id)
