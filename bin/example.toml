@@ -1,7 +1,21 @@
 # Create config.toml and use the stanza below as an example.
 
+# Recommended to keep these setting as setting values too "fast" will exceed the Meraki API rate limits.
+[general]
+thread = 4
+
+[requests]
+sleep_min = 1.0
+sleep_max = 1.5
+
+[hec]
+url = "https://localhost:8088/services/collector/event"
+  [hec.headers]
+  Authorization = "Splunk xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
 [meraki_api]
 index = "meraki_api"
+# Get the right org_id by running "./meraki_get_data.py --org"
 org_id = 11111
 repeat = 3600
   [meraki_api.headers]
