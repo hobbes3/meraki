@@ -214,6 +214,15 @@ def get_devices(r, device_statuses):
 
 def get_clients(network):
     network_id = network["id"]
+    network_type = network["type"]
+
+    if network_type == "systems manager":
+        meta = {
+            "network_id": network_id,
+            "network_type": network_type,
+        }
+        logger.debug("Not getting clients for systems manager network. Skipping...", extra=meta)
+        return
 
     meraki_url = "https://api.meraki.com/api/v0/networks/{}/clients".format(network_id)
     startingAfter = "a000000"
