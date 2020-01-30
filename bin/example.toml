@@ -25,6 +25,14 @@ orgs = [
     11111,
     22222,
 ]
+# Regex to filter on network tags.
+# The regex must match the entire tag string.
+# Tags that doesn't match with any regex will be excluded.
+# Set the list empty [] to disable any filtering.
+network_tag_regexes = [
+    "FOOBAR.+", # This regex will match on networks with tags that start with FOOBAR.
+    "^$", # This regex will match on networks without tags.
+]
 # This value correspond to the interval of inputs.conf for [script://./bin/meraki_get_data.sh], ie every hour is repeat=3600.
 repeat = 3600
   [meraki_api.headers]
